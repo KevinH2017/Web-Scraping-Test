@@ -1,4 +1,9 @@
-import requests, selectorlib, smtplib, ssl, os, time
+import requests, selectorlib, smtplib, ssl, os, time, sqlite3
+
+"INSERT INTO events VALUES('Tigers', 'Tiger City, '2088.10.14')"
+"SELECT * FROM events WHERE data='2088.10.15'"
+
+connection = sqlite3.connect("./app10/data.db")
 
 filepath = "./app10/data.txt"
 source_file = "./app10/extract.yml"
@@ -18,16 +23,6 @@ def extract(source, source_file=source_file):
     value = extractor.extract(source)["tours"]
     return value
 
-def store(extracted, filepath=filepath):
-    """Writes to text file the extracted data"""
-    with open(filepath, "a") as file:
-        file.write(extracted + "\n")
-
-def read(extracted, filepath=filepath):
-    """Opens file to be read"""
-    with open(filepath, "r") as file:
-        return file.read()
-
 def send_email(message):
     """Sends message to the target email address"""
     host = "smtp.gmail.com"
@@ -44,14 +39,34 @@ def send_email(message):
         server.login(username, password)
         server.sendmail(username, target, message)
 
+def store(extracted, filepath=filepath):
+    """Writes data to database file"""
+    row = extracted.split(",")
+    row = [item.strip() for item in row]
+    cursor = connection.cursor()
+    cursor.execute("INSERT INTO events VALUES(?,?,?)", row)
+    connection.commit()
+
+def read(extracted, filepath=filepath):
+    """Opens file to be read"""
+    row = extracted.split(",")
+    row = [item.strip() for item in row]
+    band, city, date = row
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM events WHERE band=? AND city=? AND date=?", (band, city, date))
+    rows = cursor.fetchall()
+    print(rows)
+    return rows
+
 if __name__ == "__main__":
     while True:
         scraped = scrape(url)
         extracted = extract(scraped)
         print(extracted)
-        content = read(extracted)
+        
         if extracted != "No upcoming tours":
-            if extracted not in content:
+            row = read(extracted)
+            if not row:
                 store(extracted)
                 send_email(message="New Event Found")
 
